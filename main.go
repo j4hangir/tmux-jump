@@ -22,31 +22,49 @@ func main() {
 		fmt.Println(version)
 		return
 	}
+	os.Exit(run())
+}
+
+// run does all work inside a function so deferred tty/stty restores
+// always fire — even on error paths. Never call os.Exit here.
+func run() (code int) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintln(os.Stderr, "tmux-jump panic:", r)
+			code = 1
+		}
+	}()
+
 	flag.Parse()
 	if *capturePath == "" || *outPath == "" {
 		fmt.Fprintln(os.Stderr, "usage: tmux-jump -capture FILE -out FILE [-w W] [-h H]")
-		os.Exit(2)
+		return 2
 	}
 
 	data, err := os.ReadFile(*capturePath)
 	if err != nil {
-		die(err)
+		fmt.Fprintln(os.Stderr, err)
+		return 1
 	}
 	rows := parseRows(string(data))
 
 	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
 	if err != nil {
-		die(err)
+		fmt.Fprintln(os.Stderr, err)
+		return 1
 	}
 	defer tty.Close()
 
 	saved, err := sttySave(tty)
 	if err != nil {
-		die(err)
+		fmt.Fprintln(os.Stderr, err)
+		return 1
 	}
 	defer sttyRestore(tty, saved)
+
 	if err := sttyRaw(tty); err != nil {
-		die(err)
+		fmt.Fprintln(os.Stderr, err)
+		return 1
 	}
 	defer fmt.Fprint(tty, ansiShowCur+ansiReset)
 
@@ -59,13 +77,13 @@ func main() {
 		buf := make([]byte, 1)
 		n, err := tty.Read(buf)
 		if err != nil || n == 0 {
-			return
+			return 0
 		}
 		b := buf[0]
 
 		switch {
 		case b == 0x1b, b == 0x03, b == 0x07:
-			return
+			return 0
 		case b == 0x7f, b == 0x08:
 			if len(query) > 0 {
 				query = query[:len(query)-1]
@@ -74,7 +92,7 @@ func main() {
 		case b == '\r', b == '\n':
 			if len(matches) >= 1 {
 				writeResult(matches[0])
-				return
+				return 0
 			}
 		case b >= 0x20 && b < 0x7f:
 			newQ := append(append([]rune{}, query...), rune(b))
@@ -87,7 +105,7 @@ func main() {
 			matches = newM
 			if len(matches) == 1 {
 				writeResult(matches[0])
-				return
+				return 0
 			}
 		}
 	}
@@ -127,12 +145,10 @@ func sttyRaw(tty *os.File) error {
 }
 
 func sttyRestore(tty *os.File, saved string) {
+	if saved == "" {
+		return
+	}
 	cmd := exec.Command("stty", saved)
 	cmd.Stdin = tty
 	_ = cmd.Run()
-}
-
-func die(err error) {
-	fmt.Fprintln(os.Stderr, err)
-	os.Exit(1)
 }
