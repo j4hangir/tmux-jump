@@ -1,24 +1,35 @@
-# tmux-jump
+# 🐇 tmux-jump
 
-Incremental-narrowing jump for tmux — like neovim's flash / leap, scoped to the visible pane.
+> Incremental-narrowing jump for tmux — type what you see, land on it.
 
-Press the jump key, type characters of a visible word, and the moment only one match remains the copy-mode cursor lands on it.
+[![pipeline](https://git.j4hangir.com/tmux/tmux-jump/badges/master/pipeline.svg)](https://git.j4hangir.com/tmux/tmux-jump/-/pipelines)
+[![release](https://git.j4hangir.com/tmux/tmux-jump/-/badges/release.svg)](https://git.j4hangir.com/tmux/tmux-jump/-/releases)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## How it works
+Like [`flash.nvim`](https://github.com/folke/flash.nvim) / [`leap.nvim`](https://github.com/ggandor/leap.nvim), but for the visible tmux pane. Press a key, start typing the word you're looking at, and the moment only one match remains the copy-mode cursor jumps there. No hints, no labels, no two-char mnemonics to memorise.
 
-1. Capture the visible pane (`tmux capture-pane -p`).
-2. Open a borderless `display-popup` sized to exactly overlay the pane.
-3. Inside the popup a Go TUI renders the captured content with matches highlighted (black on yellow) and everything else dimmed.
-4. Each keystroke narrows the match set using **smart-case substring** search (query has an uppercase letter → case-sensitive; else case-insensitive).
-5. When one match remains, the popup closes and the original pane enters copy-mode with the cursor placed on that (row, column).
+---
 
-## Install
+## ✨ Features
+
+- 🎯 **Incremental narrow** — type and watch matches shrink, auto-jump on unique match
+- 🔍 **Smart-case** — uppercase in query ⇒ case-sensitive, otherwise insensitive
+- 🖼️ **In-place overlay** — pane-sized borderless popup dims non-matches and highlights the rest
+- 🪶 **Single static binary** — Go, no runtime deps on the user's box
+- 🔒 **Fails safe** — any error path yields control back cleanly, never leaves the pane stuck
+- 🧵 **Visible pane only** — scoped to what's on screen, nothing funny with scrollback
+
+---
+
+## 📦 Install
 
 ### With TPM
 
 ```tmux
 set -g @plugin 'j4hangir/tmux-jump'
 ```
+
+Then `prefix + I` to fetch & install.
 
 ### Manual
 
@@ -28,41 +39,92 @@ echo "run-shell ~/.tmux/plugins/tmux-jump/tmux-jump.tmux" >> ~/.tmux.conf
 tmux source-file ~/.tmux.conf
 ```
 
-On first launch, a menu offers to download the prebuilt Linux x86_64 binary from GitLab CI artifacts or build from source (Go 1.22+ required).
+On first launch a wizard prompts you to either **download the prebuilt Linux x86_64 binary** (from GitLab CI) or **build from source** with Go.
 
-## Build
-
-Requires Go 1.22+ and tmux ≥ 3.2 (for `display-popup -B`).
+### 🗑️ Uninstall
 
 ```sh
-make build
-make test
+tmux unbind j                            # or whatever @jump-key you chose
+rm -rf ~/.tmux/plugins/tmux-jump         # also removes bin/tmux-jump
+sed -i.bak '/tmux-jump\|@jump-/d' ~/.tmux.conf
+tmux source ~/.tmux.conf
 ```
 
-## Keys (inside jump mode)
+---
+
+## 🕹️ Usage
+
+Press `prefix + j` (default), start typing. That's it.
 
 | Key | Action |
 | --- | --- |
-| printable | append to query, re-narrow |
-| Backspace | pop last character |
-| Enter | jump to first match |
-| Esc / Ctrl-C / Ctrl-G | cancel |
+| any printable char | append to query, re-narrow |
+| `Backspace` | pop last char |
+| `Enter` | jump to first match |
+| `Esc` / `Ctrl-C` / `Ctrl-G` | cancel |
 
-Unique match → auto-jump, no Enter required.
-Zero matches after a keystroke → bell, character rejected.
+- ✅ Unique match → auto-jump, no `Enter` needed
+- 🔔 Zero matches after a keystroke → bell, character rejected
 
-## Config
+---
+
+## ⚙️ Config
 
 ```tmux
-set -g @jump-key j   # default: j (invoked as prefix + j)
+set -g @jump-key j          # default: j  (invoked as prefix + j)
+set -g @jump-skip-wizard 0  # 1 = never prompt for auto-update on version mismatch
 ```
 
-## Limitations (v1)
+---
 
-- ASCII-first column math. Lines with CJK / wide characters may jump to the wrong column.
-- Works on the active pane only.
-- Requires tmux ≥ 3.2 for borderless pane-sized popups.
+## 🔬 How it works
 
-## Credits
+```
+prefix+j ──▶ capture-pane -p ──▶ display-popup -B (pane-sized) ──▶ Go TUI
+                                                                      │
+                                            type chars ──▶ narrow matches ──▶ 1 match?
+                                                                      │ yes
+                                                                      ▼
+                         copy-mode + send-keys -X top-line + cursor-down N + cursor-right M
+```
 
-Inspired by `schasse/tmux-jump` (original hint-based approach), `fcsonline/tmux-fingers` (overlay pattern), and `flash.nvim` / `leap.nvim` (incremental-narrowing UX).
+1. Capture the visible pane to a temp file (`tmux capture-pane -p`)
+2. Open a borderless `display-popup` sized exactly to the pane → perfect in-place overlay
+3. Go TUI renders the captured text: matches in **black-on-yellow**, everything else dimmed
+4. Each key re-filters (smart-case substring); on unique match the popup closes and the pane drops into copy-mode with the cursor on the target `(row, col)`
+
+---
+
+## 🛠️ Development
+
+Requires Go 1.22+ and tmux ≥ 3.2.
+
+```sh
+make build   # CGO_ENABLED=0 static binary at bin/tmux-jump
+make test    # go test ./...
+make clean
+```
+
+CI ([`.gitlab-ci.yml`](.gitlab-ci.yml)) runs `go test` + builds a static binary on every push; tags trigger a release with a downloadable asset link.
+
+---
+
+## 🚧 Known limitations (v1)
+
+- ASCII-first column math — CJK / wide chars may misalign the landing column
+- Active pane only — no cross-pane targeting
+- Requires tmux ≥ 3.2 for borderless pane-sized popups
+
+---
+
+## 🙏 Credits
+
+Inspired by:
+
+- [`schasse/tmux-jump`](https://github.com/schasse/tmux-jump) — original tmux hint-based jumper
+- [`fcsonline/tmux-fingers`](https://github.com/fcsonline/tmux-fingers) — the CI + install-wizard pattern lifted here
+- [`flash.nvim`](https://github.com/folke/flash.nvim) / [`leap.nvim`](https://github.com/ggandor/leap.nvim) — the incremental-narrowing UX
+
+## 📝 License
+
+MIT — see [LICENSE](LICENSE).
