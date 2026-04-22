@@ -1,0 +1,35 @@
+stages:
+  - test
+  - build
+  - release
+
+test:
+  stage: test
+  image: golang:1.22
+  script:
+    - go test ./...
+
+build:
+  stage: build
+  image: golang:1.22
+  script:
+    - CGO_ENABLED=0 go build -ldflags "-X main.version=$(cat VERSION)" -o tmux-jump .
+  artifacts:
+    paths:
+      - tmux-jump
+
+release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  needs: [build]
+  rules:
+    - if: $CI_COMMIT_TAG
+  script:
+    - echo "Releasing $CI_COMMIT_TAG"
+  release:
+    tag_name: $CI_COMMIT_TAG
+    description: "tmux-jump $CI_COMMIT_TAG"
+    assets:
+      links:
+        - name: tmux-jump-linux-amd64
+          url: "${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/raw/tmux-jump?job=build"
