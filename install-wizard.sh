@@ -65,36 +65,22 @@ function download_binary() {
 		return 1
 	fi
 
-	echo "Getting latest tag..."
-	local tags
-	if ! tags=$(curl -sSf --max-time 15 "$PROJECT_API/repository/tags" 2>&1); then
-		echo "Could not fetch tags from $PROJECT_API/repository/tags"
-		echo "Response: $tags"
-		return 1
-	fi
-	if [[ -z "$tags" || "$tags" == "[]" ]]; then
-		echo "No tags found — CI hasn't published a release yet."
-		echo "Build from source, or wait for a tag at $PROJECT_URL/-/tags"
-		return 1
-	fi
-
-	local tag
-	tag=$(printf '%s' "$tags" | grep -o '"name":"[^"]*"' | head -1 | sed 's/"name":"\([^"]*\)"/\1/')
-	if [[ -z "$tag" ]]; then
-		echo "Could not extract tag name from tags response."
-		return 1
-	fi
-
+	# Pin to the tag matching VERSION so the VERSION file is the source of
+	# truth. If CI hasn't published this tag yet, fail loudly rather than
+	# silently installing a mismatched binary — otherwise tmux-jump.tmux's
+	# version check will fire the wizard on every reload.
+	local tag="v$VERSION"
 	local url="$PROJECT_URL/-/jobs/artifacts/$tag/raw/tmux-jump?job=build"
-	echo "Installing tmux-jump v$VERSION (binary: $tag)..."
+	echo "Installing tmux-jump $tag..."
 
 	# Download to a .tmp file; atomic rename on success. This ensures
 	# we never leave a corrupt binary at bin/tmux-jump if curl dies.
 	local tmp="$CURRENT_DIR/bin/tmux-jump.tmp"
 	if ! curl -sSfL --max-time 120 "$url" -o "$tmp"; then
 		rm -f "$tmp"
-		echo "Failed to download binary. The CI build for $tag may still be running or may have failed."
-		echo "Check $PROJECT_URL/-/pipelines"
+		echo "Could not download $tag binary. Either CI hasn't published $tag yet,"
+		echo "or the tag doesn't exist. Check $PROJECT_URL/-/tags and $PROJECT_URL/-/pipelines,"
+		echo "or install from source with Go."
 		return 1
 	fi
 	if [[ ! -s "$tmp" ]]; then
