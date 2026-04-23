@@ -85,18 +85,20 @@ set -g @jump-skip-wizard 0             # 1 = never prompt for auto-update on ver
 ## 🔬 How it works
 
 ```
-prefix+j ──▶ capture-pane -p ──▶ display-popup -B (pane-sized) ──▶ Go TUI
-                                                                      │
-                                            type chars ──▶ narrow matches ──▶ 1 match?
-                                                                      │ yes
-                                                                      ▼
-                         copy-mode + send-keys -X top-line + cursor-down N + cursor-right M
+prefix+j  →  capture-pane -p  →  display-popup -B  →  Go TUI
+                                                       │
+                                       type chars  →  narrow
+                                                       │
+                                              unique match?
+                                                       │ yes
+                                                       ▼
+                                  copy-mode + cursor to (row, col)
 ```
 
-1. Capture the visible pane to a temp file (`tmux capture-pane -p`)
-2. Open a borderless `display-popup` sized exactly to the pane → perfect in-place overlay
-3. Go TUI renders the captured text: matches in **black-on-yellow**, everything else dimmed
-4. Each key re-filters (smart-case substring); on unique match the popup closes and the pane drops into copy-mode with the cursor on the target `(row, col)`
+1. **Capture** the visible pane to a temp file (`tmux capture-pane -p`).
+2. **Overlay** a borderless `display-popup` sized exactly to the pane — perfect in-place redraw.
+3. **Render** the captured text in the Go TUI: matches highlighted, everything else dimmed.
+4. **Narrow** on each keystroke (smart-case substring). Unique match → popup closes, pane drops into copy-mode with the cursor on `(row, col)`.
 
 ---
 
