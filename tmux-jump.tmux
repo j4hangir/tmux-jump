@@ -33,10 +33,17 @@ fi
 key=$(tmux show-option -gqv @jump-key 2>/dev/null || echo "")
 [[ -z "$key" ]] && key=j
 
+select_key=$(tmux show-option -gqv @jump-key-select 2>/dev/null || echo "")
+
 hints=$(tmux show-option -gqv @jump-hints 2>/dev/null || echo "")
 [[ -z "$hints" ]] && hints=duhetonasi
 
 tmux bind-key -N "Jump to visible text in copy mode" "$key" \
 	run-shell -b "JUMP_BINARY='$JUMP_BINARY' JUMP_HINTS='$hints' $CURRENT_DIR/tmux-jump.sh" 2>/dev/null || true
+
+if [[ -n "$select_key" ]]; then
+	tmux bind-key -N "Jump to visible text and select match in copy mode" "$select_key" \
+		run-shell -b "JUMP_BINARY='$JUMP_BINARY' JUMP_HINTS='$hints' JUMP_SELECT=1 $CURRENT_DIR/tmux-jump.sh" 2>/dev/null || true
+fi
 
 exit 0

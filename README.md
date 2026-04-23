@@ -76,9 +76,12 @@ Press `prefix + j` (default), start typing. That's it.
 
 ```tmux
 set -g @jump-key j                     # default: j  (invoked as prefix + j)
+set -g @jump-key-select J              # optional: jump, then visual-select the match
 set -g @jump-hints 'duhetonasi'        # up to 10 hint chars, one per match in hint mode
 set -g @jump-skip-wizard 0             # 1 = never prompt for auto-update on version mismatch
 ```
+
+`@jump-key-select` is a second, opt-in binding: same picker, but on landing it enters copy-mode, begins a selection, and extends it across the matched query — ready to yank.
 
 ---
 

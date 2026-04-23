@@ -234,7 +234,7 @@ func parseRows(s string) [][]rune {
 }
 
 func writeResult(m Match) {
-	_ = os.WriteFile(*outPath, []byte(fmt.Sprintf("%d,%d\n", m.Row, m.Col)), 0644)
+	_ = os.WriteFile(*outPath, []byte(fmt.Sprintf("%d,%d,%d\n", m.Row, m.Col, m.Len)), 0644)
 }
 
 func sttySave(tty *os.File) (string, error) {

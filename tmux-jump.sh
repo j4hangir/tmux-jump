@@ -51,10 +51,11 @@ tmux display-popup -E -B -w "$w" -h "$h" -x "$x" -y "$y" \
 
 [ -s "$res" ] || exit 0
 
-IFS=, read -r row col <"$res" || exit 0
+IFS=, read -r row col len <"$res" || exit 0
 [ -n "${row:-}" ] && [ -n "${col:-}" ] || exit 0
 case "$row" in '' | *[!0-9]*) exit 0 ;; esac
 case "$col" in '' | *[!0-9]*) exit 0 ;; esac
+case "${len:-}" in *[!0-9]*) len="" ;; esac
 
 tmux copy-mode -t "$pane" 2>/dev/null || exit 0
 entered_copy=1
@@ -65,6 +66,12 @@ if [ "$row" -gt 0 ]; then
 fi
 if [ "$col" -gt 0 ]; then
 	tmux send-keys -t "$pane" -N "$col" -X cursor-right 2>/dev/null || exit 0
+fi
+if [ "${JUMP_SELECT:-0}" = 1 ] && [ -n "${len:-}" ] && [ "$len" -gt 0 ]; then
+	tmux send-keys -t "$pane" -X begin-selection 2>/dev/null || exit 0
+	if [ "$len" -gt 1 ]; then
+		tmux send-keys -t "$pane" -N "$((len - 1))" -X cursor-right 2>/dev/null || exit 0
+	fi
 fi
 completed=1
 exit 0
