@@ -6,16 +6,18 @@ import (
 )
 
 const (
-	ansiReset     = "\x1b[0m"
-	ansiDim       = "\x1b[2;37m"
-	ansiMatch     = "\x1b[1;30;103m"
-	ansiStatus    = "\x1b[7m"
-	ansiClear     = "\x1b[2J\x1b[H"
-	ansiHideCur   = "\x1b[?25l"
-	ansiShowCur   = "\x1b[?25h"
+	ansiReset    = "\x1b[0m"
+	ansiDim      = "\x1b[2;37m"
+	ansiMatch    = "\x1b[1;30;103m"
+	ansiSelected = "\x1b[1;97;41m"
+	ansiStatus   = "\x1b[7m"
+	ansiClear    = "\x1b[2J\x1b[H"
+	ansiHideCur  = "\x1b[?25l"
+	ansiShowCur  = "\x1b[?25h"
 )
 
-func render(rows [][]rune, matches []Match, query string, width, height int) string {
+// cell: 0 none, 1 match, 2 selected match
+func render(rows [][]rune, matches []Match, selected int, query string, width, height int) string {
 	var b strings.Builder
 	b.WriteString(ansiHideCur)
 	b.WriteString(ansiClear)
@@ -25,16 +27,22 @@ func render(rows [][]rune, matches []Match, query string, width, height int) str
 		contentRows = 1
 	}
 
-	hi := make([][]bool, len(rows))
-	for _, m := range matches {
+	navigable := len(matches) > 1 && len(matches) <= 9
+
+	hi := make([][]byte, len(rows))
+	for i, m := range matches {
 		if m.Row >= len(hi) {
 			continue
 		}
 		if hi[m.Row] == nil {
-			hi[m.Row] = make([]bool, len(rows[m.Row]))
+			hi[m.Row] = make([]byte, len(rows[m.Row]))
 		}
-		for i := 0; i < m.Len && m.Col+i < len(hi[m.Row]); i++ {
-			hi[m.Row][m.Col+i] = true
+		mark := byte(1)
+		if navigable && i == selected {
+			mark = 2
+		}
+		for k := 0; k < m.Len && m.Col+k < len(hi[m.Row]); k++ {
+			hi[m.Row][m.Col+k] = mark
 		}
 	}
 
@@ -46,7 +54,7 @@ func render(rows [][]rune, matches []Match, query string, width, height int) str
 			continue
 		}
 		row := rows[r]
-		var mask []bool
+		var mask []byte
 		if r < len(hi) {
 			mask = hi[r]
 		}
@@ -55,9 +63,14 @@ func render(rows [][]rune, matches []Match, query string, width, height int) str
 
 	b.WriteString("\r\n")
 	b.WriteString(ansiStatus)
-	status := fmt.Sprintf(" jump> %s  (%d matches) ", query, len(matches))
-	if len(query) == 0 {
-		status = fmt.Sprintf(" jump> (type to narrow; Esc to cancel) ")
+	var status string
+	switch {
+	case len(query) == 0:
+		status = " jump> (type to narrow; Esc to cancel) "
+	case navigable:
+		status = fmt.Sprintf(" jump> %s  [%d/%d]  Tab/↑↓ to pick, Enter to jump ", query, selected+1, len(matches))
+	default:
+		status = fmt.Sprintf(" jump> %s  (%d matches) ", query, len(matches))
 	}
 	if len(status) > width {
 		status = status[:width]
@@ -68,23 +81,29 @@ func render(rows [][]rune, matches []Match, query string, width, height int) str
 	return b.String()
 }
 
-func writeRow(b *strings.Builder, row []rune, mask []bool, width int) {
-	state := 0 // 0 dim, 1 match
+func writeRow(b *strings.Builder, row []rune, mask []byte, width int) {
+	state := byte(0)
 	b.WriteString(ansiDim)
 	limit := len(row)
 	if limit > width {
 		limit = width
 	}
 	for i := 0; i < limit; i++ {
-		m := i < len(mask) && mask[i]
-		if m && state == 0 {
+		var m byte
+		if i < len(mask) {
+			m = mask[i]
+		}
+		if m != state {
 			b.WriteString(ansiReset)
-			b.WriteString(ansiMatch)
-			state = 1
-		} else if !m && state == 1 {
-			b.WriteString(ansiReset)
-			b.WriteString(ansiDim)
-			state = 0
+			switch m {
+			case 0:
+				b.WriteString(ansiDim)
+			case 1:
+				b.WriteString(ansiMatch)
+			case 2:
+				b.WriteString(ansiSelected)
+			}
+			state = m
 		}
 		b.WriteRune(row[i])
 	}

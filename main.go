@@ -70,28 +70,58 @@ func run() (code int) {
 
 	query := []rune{}
 	var matches []Match
+	selected := 0
 
 	for {
-		fmt.Fprint(tty, render(rows, matches, string(query), *width, *height))
+		fmt.Fprint(tty, render(rows, matches, selected, string(query), *width, *height))
 
-		buf := make([]byte, 1)
-		n, err := tty.Read(buf)
-		if err != nil || n == 0 {
+		b, ok := readByte(tty, true)
+		if !ok {
 			return 0
 		}
-		b := buf[0]
+
+		// Escape sequence: ESC [ ... or ESC O ...
+		if b == 0x1b {
+			b2, ok2 := readByte(tty, false)
+			if !ok2 {
+				return 0 // bare Esc
+			}
+			if b2 != '[' && b2 != 'O' {
+				continue
+			}
+			b3, ok3 := readByte(tty, false)
+			if !ok3 {
+				continue
+			}
+			switch b3 {
+			case 'A', 'D': // up, left
+				if n := len(matches); n > 1 && n <= selectLimit {
+					selected = (selected - 1 + n) % n
+				}
+			case 'B', 'C', 'Z': // down, right, shift-tab
+				if n := len(matches); n > 1 && n <= selectLimit {
+					selected = (selected + 1) % n
+				}
+			}
+			continue
+		}
 
 		switch {
-		case b == 0x1b, b == 0x03, b == 0x07:
+		case b == 0x03, b == 0x07:
 			return 0
+		case b == 0x09: // Tab → next
+			if n := len(matches); n > 1 && n <= selectLimit {
+				selected = (selected + 1) % n
+			}
 		case b == 0x7f, b == 0x08:
 			if len(query) > 0 {
 				query = query[:len(query)-1]
 				matches = findMatches(rows, query)
+				selected = defaultSelected(len(matches))
 			}
 		case b == '\r', b == '\n':
-			if len(matches) >= 1 {
-				writeResult(matches[0])
+			if len(matches) >= 1 && selected < len(matches) {
+				writeResult(matches[selected])
 				return 0
 			}
 		case b >= 0x20 && b < 0x7f:
@@ -103,10 +133,41 @@ func run() (code int) {
 			}
 			query = newQ
 			matches = newM
+			selected = defaultSelected(len(matches))
 			if len(matches) == 1 {
 				writeResult(matches[0])
 				return 0
 			}
+		}
+	}
+}
+
+const selectLimit = 9
+
+// defaultSelected picks the LAST match when the set is small enough
+// to navigate; otherwise 0 (unused until navigation engages).
+func defaultSelected(n int) int {
+	if n > 0 && n <= selectLimit {
+		return n - 1
+	}
+	return 0
+}
+
+// readByte reads one byte. If blocking is true, retries on timeout
+// (stty is set to min 0 time 1). If false, returns (0,false) on timeout,
+// used for peeking escape-sequence continuation bytes.
+func readByte(tty *os.File, blocking bool) (byte, bool) {
+	buf := make([]byte, 1)
+	for {
+		n, err := tty.Read(buf)
+		if err != nil {
+			return 0, false
+		}
+		if n == 1 {
+			return buf[0], true
+		}
+		if !blocking {
+			return 0, false
 		}
 	}
 }
@@ -139,7 +200,7 @@ func sttySave(tty *os.File) (string, error) {
 }
 
 func sttyRaw(tty *os.File) error {
-	cmd := exec.Command("stty", "-icanon", "-echo", "min", "1", "time", "0")
+	cmd := exec.Command("stty", "-icanon", "-echo", "min", "0", "time", "1")
 	cmd.Stdin = tty
 	return cmd.Run()
 }
