@@ -33,7 +33,10 @@ fi
 key=$(tmux show-option -gqv @jump-key 2>/dev/null || echo "")
 [[ -z "$key" ]] && key=j
 
+hints=$(tmux show-option -gqv @jump-hints 2>/dev/null || echo "")
+[[ -z "$hints" ]] && hints=duhetonasi
+
 tmux bind-key -N "Jump to visible text in copy mode" "$key" \
-	run-shell -b "JUMP_BINARY='$JUMP_BINARY' $CURRENT_DIR/tmux-jump.sh" 2>/dev/null || true
+	run-shell -b "JUMP_BINARY='$JUMP_BINARY' JUMP_HINTS='$hints' $CURRENT_DIR/tmux-jump.sh" 2>/dev/null || true
 
 exit 0

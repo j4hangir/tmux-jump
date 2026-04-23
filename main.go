@@ -15,9 +15,15 @@ var (
 	outPath     = flag.String("out", "", "path to write result (row,col)")
 	width       = flag.Int("w", 80, "overlay width")
 	height      = flag.Int("h", 24, "overlay height")
+	hintsFlag   = flag.String("hints", defaultHints, "hint chars (up to 10) for Tab-triggered hint mode")
 )
 
 var version = "dev"
+
+const (
+	defaultHints = "duhetonasi"
+	selectLimit  = 10
+)
 
 func main() {
 	if len(os.Args) > 1 && (os.Args[1] == "version" || os.Args[1] == "-version" || os.Args[1] == "--version") {
@@ -39,8 +45,13 @@ func run() (code int) {
 
 	flag.Parse()
 	if *capturePath == "" || *outPath == "" {
-		fmt.Fprintln(os.Stderr, "usage: tmux-jump -capture FILE -out FILE [-w W] [-h H]")
+		fmt.Fprintln(os.Stderr, "usage: tmux-jump -capture FILE -out FILE [-w W] [-h H] [-hints STR]")
 		return 2
+	}
+
+	hints := []rune(*hintsFlag)
+	if len(hints) > selectLimit {
+		hints = hints[:selectLimit]
 	}
 
 	data, err := os.ReadFile(*capturePath)
@@ -73,9 +84,10 @@ func run() (code int) {
 	query := []rune{}
 	var matches []Match
 	selected := 0
+	hintMode := false
 
 	for {
-		fmt.Fprint(tty, render(rows, matches, selected, string(query), *width, *height))
+		fmt.Fprint(tty, render(rows, matches, selected, string(query), *width, *height, hintMode, hints))
 
 		b, ok := readByte(tty, true)
 		if !ok {
@@ -86,13 +98,22 @@ func run() (code int) {
 		if b == 0x1b {
 			b2, ok2 := readByte(tty, false)
 			if !ok2 {
-				return 0 // bare Esc
+				// bare Esc: exit hint mode if on, else cancel
+				if hintMode {
+					hintMode = false
+					continue
+				}
+				return 0
 			}
 			if b2 != '[' && b2 != 'O' {
 				continue
 			}
 			b3, ok3 := readByte(tty, false)
 			if !ok3 {
+				continue
+			}
+			if hintMode {
+				// ignore navigation while hint mode is on
 				continue
 			}
 			switch b3 {
@@ -111,11 +132,16 @@ func run() (code int) {
 		switch {
 		case b == 0x03, b == 0x07:
 			return 0
-		case b == 0x09: // Tab → next
-			if n := len(matches); n > 1 && n <= selectLimit {
-				selected = (selected + 1) % n
+		case b == 0x09: // Tab → enter hint mode (or exit if already on)
+			if hintMode {
+				hintMode = false
+				continue
+			}
+			if n := len(matches); n > 1 && n <= selectLimit && len(hints) > 0 {
+				hintMode = true
 			}
 		case b == 0x7f, b == 0x08:
+			hintMode = false
 			if len(query) > 0 {
 				query = query[:len(query)-1]
 				matches = findMatches(rows, query)
@@ -127,6 +153,14 @@ func run() (code int) {
 				return 0
 			}
 		case b >= 0x20 && b < 0x7f:
+			if hintMode {
+				if idx := hintIndex(hints, rune(b)); idx >= 0 && idx < len(matches) {
+					writeResult(matches[idx])
+					return 0
+				}
+				// non-hint char: leave hint mode, fall through to narrow
+				hintMode = false
+			}
 			newQ := append(append([]rune{}, query...), rune(b))
 			newM := findMatches(rows, newQ)
 			if len(newM) == 0 {
@@ -144,8 +178,6 @@ func run() (code int) {
 	}
 }
 
-const selectLimit = 9
-
 // defaultSelected picks the LAST match when the set is small enough
 // to navigate; otherwise 0 (unused until navigation engages).
 func defaultSelected(n int) int {
@@ -153,6 +185,15 @@ func defaultSelected(n int) int {
 		return n - 1
 	}
 	return 0
+}
+
+func hintIndex(hints []rune, r rune) int {
+	for i, h := range hints {
+		if h == r {
+			return i
+		}
+	}
+	return -1
 }
 
 // readByte reads one byte. If blocking is true, retries on timeout

@@ -60,10 +60,14 @@ Press `prefix + j` (default), start typing. That's it.
 | --- | --- |
 | any printable char | append to query, re-narrow |
 | `Backspace` | pop last char |
-| `Enter` | jump to first match |
-| `Esc` / `Ctrl-C` / `Ctrl-G` | cancel |
+| `Enter` | jump to selected match |
+| `Tab` | (≤10 matches) enter **hint mode** — overlay hint chars on matches |
+| hint char | (in hint mode) jump to that match |
+| `↑` `↓` `←` `→` | (≤10 matches) cycle selection |
+| `Esc` / `Ctrl-C` / `Ctrl-G` | cancel (or exit hint mode) |
 
 - ✅ Unique match → auto-jump, no `Enter` needed
+- 🎯 ≤10 matches → press `Tab`, then the hint char shown over a match to jump there
 - 🔔 Zero matches after a keystroke → bell, character rejected
 
 ---
@@ -71,8 +75,9 @@ Press `prefix + j` (default), start typing. That's it.
 ## ⚙️ Config
 
 ```tmux
-set -g @jump-key j          # default: j  (invoked as prefix + j)
-set -g @jump-skip-wizard 0  # 1 = never prompt for auto-update on version mismatch
+set -g @jump-key j                     # default: j  (invoked as prefix + j)
+set -g @jump-hints 'duhetonasi'        # up to 10 hint chars, one per match in hint mode
+set -g @jump-skip-wizard 0             # 1 = never prompt for auto-update on version mismatch
 ```
 
 ---

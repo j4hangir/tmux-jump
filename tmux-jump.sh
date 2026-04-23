@@ -40,8 +40,13 @@ res="$tmpdir/res"
 
 tmux capture-pane -p -t "$pane" >"$cap" 2>/dev/null || exit 0
 
+hints_arg=""
+if [ -n "${JUMP_HINTS:-}" ]; then
+	hints_arg="-hints $(printf %q "$JUMP_HINTS")"
+fi
+
 tmux display-popup -E -B -w "$w" -h "$h" -x "$x" -y "$y" \
-	"$BIN -capture $(printf %q "$cap") -out $(printf %q "$res") -w $w -h $h" \
+	"$BIN -capture $(printf %q "$cap") -out $(printf %q "$res") -w $w -h $h $hints_arg" \
 	2>/dev/null || exit 0
 
 [ -s "$res" ] || exit 0
