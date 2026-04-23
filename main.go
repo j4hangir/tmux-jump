@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -156,15 +158,20 @@ func defaultSelected(n int) int {
 // readByte reads one byte. If blocking is true, retries on timeout
 // (stty is set to min 0 time 1). If false, returns (0,false) on timeout,
 // used for peeking escape-sequence continuation bytes.
+//
+// On Linux tty with VMIN=0, read(2) returning 0 bytes means "timeout, no
+// data" — but Go's *os.File surfaces that as io.EOF because ZeroReadIsEOF
+// is set for file-kind descriptors. Treat EOF (and any zero-byte read) as
+// a timeout, not a fatal error.
 func readByte(tty *os.File, blocking bool) (byte, bool) {
 	buf := make([]byte, 1)
 	for {
 		n, err := tty.Read(buf)
-		if err != nil {
-			return 0, false
-		}
 		if n == 1 {
 			return buf[0], true
+		}
+		if err != nil && !errors.Is(err, io.EOF) {
+			return 0, false
 		}
 		if !blocking {
 			return 0, false
