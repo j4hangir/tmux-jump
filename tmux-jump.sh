@@ -31,21 +31,33 @@ cleanup() {
 }
 trap cleanup EXIT
 
-info=$(tmux display-message -p -F '#{pane_id} #{pane_width} #{pane_height} #{pane_left} #{pane_top}' 2>/dev/null) || exit 0
-read -r pane w h x y <<<"$info"
+info=$(tmux display-message -p -F '#{pane_id} #{pane_width} #{pane_height} #{pane_in_mode} #{pane_mode} #{scroll_position}' 2>/dev/null) || exit 0
+read -r pane w h in_mode mode scroll_pos <<<"$info"
 [ -n "${pane:-}" ] || exit 0
+
+in_copy=0
+if [ "${in_mode:-0}" = 1 ] && [ "${mode:-}" = "copy-mode" ]; then
+	in_copy=1
+fi
+case "${scroll_pos:-}" in '' | *[!0-9]*) scroll_pos=0 ;; esac
 
 cap="$tmpdir/cap"
 res="$tmpdir/res"
 
-tmux capture-pane -p -t "$pane" >"$cap" 2>/dev/null || exit 0
+if [ "$in_copy" = 1 ] && [ "$scroll_pos" -gt 0 ]; then
+	cap_start=$((-scroll_pos))
+	cap_end=$((-scroll_pos + h - 1))
+	tmux capture-pane -p -t "$pane" -S "$cap_start" -E "$cap_end" >"$cap" 2>/dev/null || exit 0
+else
+	tmux capture-pane -p -t "$pane" >"$cap" 2>/dev/null || exit 0
+fi
 
 hints_arg=""
 if [ -n "${JUMP_HINTS:-}" ]; then
 	hints_arg="-hints $(printf %q "$JUMP_HINTS")"
 fi
 
-tmux display-popup -E -B -w "$w" -h "$h" -x "$x" -y "$y" \
+tmux display-popup -E -B -w "$w" -h "$h" -x P -y P \
 	"$BIN -capture $(printf %q "$cap") -out $(printf %q "$res") -w $w -h $h $hints_arg" \
 	2>/dev/null || exit 0
 
@@ -57,8 +69,10 @@ case "$row" in '' | *[!0-9]*) exit 0 ;; esac
 case "$col" in '' | *[!0-9]*) exit 0 ;; esac
 case "${len:-}" in *[!0-9]*) len="" ;; esac
 
-tmux copy-mode -t "$pane" 2>/dev/null || exit 0
-entered_copy=1
+if [ "$in_copy" != 1 ]; then
+	tmux copy-mode -t "$pane" 2>/dev/null || exit 0
+	entered_copy=1
+fi
 tmux send-keys -t "$pane" -X top-line 2>/dev/null || exit 0
 tmux send-keys -t "$pane" -X start-of-line 2>/dev/null || exit 0
 if [ "$row" -gt 0 ]; then
