@@ -85,13 +85,26 @@ func run() (code int) {
 	var matches []Match
 	selected := 0
 	hintMode := false
+	autoArmed := false
 
 	for {
 		fmt.Fprint(tty, render(rows, matches, selected, string(query), *width, *height, hintMode, hints))
 
-		b, ok := readByte(tty, true)
-		if !ok {
-			return 0
+		navigable := len(matches) >= 2 && len(matches) <= selectLimit && len(hints) > 0
+		var b byte
+		var ok bool
+		if !hintMode && autoArmed && navigable {
+			b, ok = readBytePoll(tty)
+			if !ok {
+				hintMode = true
+				autoArmed = false
+				continue
+			}
+		} else {
+			b, ok = readByte(tty, true)
+			if !ok {
+				return 0
+			}
 		}
 
 		// Escape sequence: ESC [ ... or ESC O ...
@@ -101,6 +114,7 @@ func run() (code int) {
 				// bare Esc: exit hint mode if on, else cancel
 				if hintMode {
 					hintMode = false
+					autoArmed = false
 					continue
 				}
 				return 0
@@ -120,10 +134,12 @@ func run() (code int) {
 			case 'A', 'D': // up, left
 				if n := len(matches); n > 1 && n <= selectLimit {
 					selected = (selected - 1 + n) % n
+					autoArmed = false
 				}
 			case 'B', 'C', 'Z': // down, right, shift-tab
 				if n := len(matches); n > 1 && n <= selectLimit {
 					selected = (selected + 1) % n
+					autoArmed = false
 				}
 			}
 			continue
@@ -135,10 +151,12 @@ func run() (code int) {
 		case b == 0x09: // Tab → enter hint mode (or exit if already on)
 			if hintMode {
 				hintMode = false
+				autoArmed = false
 				continue
 			}
 			if n := len(matches); n > 1 && n <= selectLimit && len(hints) > 0 {
 				hintMode = true
+				autoArmed = false
 			}
 		case b == 0x7f, b == 0x08:
 			hintMode = false
@@ -146,6 +164,7 @@ func run() (code int) {
 				query = query[:len(query)-1]
 				matches = findMatches(rows, query)
 				selected = defaultSelected(len(matches))
+				autoArmed = true
 			}
 		case b == '\r', b == '\n':
 			if len(matches) >= 1 && selected < len(matches) {
@@ -174,6 +193,7 @@ func run() (code int) {
 				writeResult(matches[0])
 				return 0
 			}
+			autoArmed = true
 		}
 	}
 }
@@ -218,6 +238,18 @@ func readByte(tty *os.File, blocking bool) (byte, bool) {
 			return 0, false
 		}
 	}
+}
+
+// readBytePoll waits one stty quantum (~100ms with time 1) for a byte.
+// Returns (b, true) if data arrived, (0, false) on timeout. Used to fire
+// auto-hint after a brief idle without losing the next keystroke.
+func readBytePoll(tty *os.File) (byte, bool) {
+	buf := make([]byte, 1)
+	n, _ := tty.Read(buf)
+	if n == 1 {
+		return buf[0], true
+	}
+	return 0, false
 }
 
 func parseRows(s string) [][]rune {
