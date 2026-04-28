@@ -11,11 +11,12 @@ import (
 )
 
 var (
-	capturePath = flag.String("capture", "", "path to captured pane file")
-	outPath     = flag.String("out", "", "path to write result (row,col)")
-	width       = flag.Int("w", 80, "overlay width")
-	height      = flag.Int("h", 24, "overlay height")
-	hintsFlag   = flag.String("hints", defaultHints, "hint chars (up to 10) for Tab-triggered hint mode")
+	capturePath  = flag.String("capture", "", "path to captured pane file")
+	outPath      = flag.String("out", "", "path to write result (row,col)")
+	width        = flag.Int("w", 80, "overlay width")
+	height       = flag.Int("h", 24, "overlay height")
+	hintsFlag    = flag.String("hints", defaultHints, "hint chars (up to 10) for Tab-triggered hint mode")
+	autoHintMsec = flag.Int("auto-hint-delay", 100, "ms idle before hints auto-show when ≤10 matches; 0 disables (rounded up to 100ms quanta)")
 )
 
 var version = "dev"
@@ -52,6 +53,11 @@ func run() (code int) {
 	hints := []rune(*hintsFlag)
 	if len(hints) > selectLimit {
 		hints = hints[:selectLimit]
+	}
+
+	autoHintQuanta := 0
+	if *autoHintMsec > 0 {
+		autoHintQuanta = (*autoHintMsec + 99) / 100
 	}
 
 	data, err := os.ReadFile(*capturePath)
@@ -93,8 +99,8 @@ func run() (code int) {
 		navigable := len(matches) >= 2 && len(matches) <= selectLimit && len(hints) > 0
 		var b byte
 		var ok bool
-		if !hintMode && autoArmed && navigable {
-			b, ok = readBytePoll(tty)
+		if !hintMode && autoArmed && navigable && autoHintQuanta > 0 {
+			b, ok = readBytePoll(tty, autoHintQuanta)
 			if !ok {
 				hintMode = true
 				autoArmed = false
@@ -240,14 +246,16 @@ func readByte(tty *os.File, blocking bool) (byte, bool) {
 	}
 }
 
-// readBytePoll waits one stty quantum (~100ms with time 1) for a byte.
-// Returns (b, true) if data arrived, (0, false) on timeout. Used to fire
-// auto-hint after a brief idle without losing the next keystroke.
-func readBytePoll(tty *os.File) (byte, bool) {
+// readBytePoll waits up to N stty quanta (each ~100ms with time 1) for a
+// byte. Returns (b, true) if data arrived, (0, false) on timeout. Used to
+// fire auto-hint after a brief idle without losing the next keystroke.
+func readBytePoll(tty *os.File, quanta int) (byte, bool) {
 	buf := make([]byte, 1)
-	n, _ := tty.Read(buf)
-	if n == 1 {
-		return buf[0], true
+	for i := 0; i < quanta; i++ {
+		n, _ := tty.Read(buf)
+		if n == 1 {
+			return buf[0], true
+		}
 	}
 	return 0, false
 }
