@@ -67,7 +67,7 @@ Press `prefix + j` (default), start typing. That's it.
 | `Esc` / `Ctrl-C` / `Ctrl-G` | cancel (or exit hint mode) |
 
 - ✅ Unique match → auto-jump, no `Enter` needed
-- 🎯 ≤10 matches → hints auto-appear after ~100ms idle (or press `Tab` to show them now)
+- 🎯 ≤10 matches → hints auto-appear after ~300ms idle (or press `Tab` to show them now)
 - 🔔 Zero matches after a keystroke → bell, character rejected
 
 ---
@@ -78,7 +78,7 @@ Press `prefix + j` (default), start typing. That's it.
 set -g @jump-key j                     # default: j  (invoked as prefix + j)
 set -g @jump-key-select J              # optional: jump, then visual-select the match
 set -g @jump-hints 'duhetonasi'        # up to 10 hint chars, one per match in hint mode
-set -g @jump-auto-hint-delay 100       # ms idle before hints auto-show (0 = disable, rounded up to 100ms)
+set -g @jump-auto-hint-delay 300       # ms idle before hints auto-show (0 = disable, rounded up to nearest 100ms)
 set -g @jump-skip-wizard 0             # 1 = never prompt for auto-update on version mismatch
 ```
 

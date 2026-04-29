@@ -16,7 +16,7 @@ var (
 	width        = flag.Int("w", 80, "overlay width")
 	height       = flag.Int("h", 24, "overlay height")
 	hintsFlag    = flag.String("hints", defaultHints, "hint chars (up to 10) for Tab-triggered hint mode")
-	autoHintMsec = flag.Int("auto-hint-delay", 100, "ms idle before hints auto-show when ≤10 matches; 0 disables (rounded up to 100ms quanta)")
+	autoHintMsec = flag.Int("auto-hint-delay", 300, "ms idle before hints auto-show when ≤10 matches; 0 disables (rounded up to nearest 100ms)")
 )
 
 var version = "dev"
