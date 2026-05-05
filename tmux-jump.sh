@@ -44,12 +44,21 @@ case "${scroll_pos:-}" in '' | *[!0-9]*) scroll_pos=0 ;; esac
 cap="$tmpdir/cap"
 res="$tmpdir/res"
 
-if [ "$in_copy" = 1 ] && [ "$scroll_pos" -gt 0 ]; then
+if [ "$scroll_pos" -gt 0 ]; then
 	cap_start=$((-scroll_pos))
 	cap_end=$((-scroll_pos + h - 1))
 	tmux capture-pane -p -t "$pane" -S "$cap_start" -E "$cap_end" >"$cap" 2>/dev/null || exit 0
 else
 	tmux capture-pane -p -t "$pane" >"$cap" 2>/dev/null || exit 0
+fi
+
+if [ -n "${JUMP_DEBUG:-}" ]; then
+	{
+		echo "info=[$info]"
+		echo "pane=$pane w=$w h=$h in_mode=$in_mode mode=[$mode] scroll_pos=$scroll_pos in_copy=$in_copy"
+		echo "--- captured ($(wc -l < "$cap") lines) ---"
+		cat "$cap"
+	} >>"${JUMP_DEBUG}" 2>/dev/null || true
 fi
 
 hints_arg=""
