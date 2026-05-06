@@ -90,7 +90,6 @@ if [ "$in_copy" != 1 ]; then
 	entered_copy=1
 fi
 tmux send-keys -t "$pane" -X top-line 2>/dev/null || exit 0
-tmux send-keys -t "$pane" -X start-of-line 2>/dev/null || exit 0
 if [ "$row" -gt 0 ]; then
 	tmux send-keys -t "$pane" -N "$row" -X cursor-down 2>/dev/null || exit 0
 fi
