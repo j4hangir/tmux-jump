@@ -44,13 +44,16 @@ case "${scroll_pos:-}" in '' | *[!0-9]*) scroll_pos=0 ;; esac
 cap="$tmpdir/cap"
 res="$tmpdir/res"
 
-if [ "$scroll_pos" -gt 0 ]; then
-	cap_start=$((-scroll_pos))
-	cap_end=$((-scroll_pos + h - 1))
-	tmux capture-pane -p -t "$pane" -S "$cap_start" -E "$cap_end" >"$cap" 2>/dev/null || exit 0
-else
-	tmux capture-pane -p -t "$pane" >"$cap" 2>/dev/null || exit 0
-fi
+# Use format expansion in -S/-E so tmux evaluates scroll_position
+# atomically at capture time. Decoupling the read from the capture (as
+# we did before) leaves a race: any new line arriving in the pane
+# between the two bumps oy by 1, and our pre-computed -S/-E then
+# samples one row off. Empty scroll_position (not in copy-mode)
+# evaluates to 0, giving the live-pane range [0, h-1].
+tmux capture-pane -p -t "$pane" \
+	-S '-#{scroll_position}' \
+	-E '#{e|-:#{e|-:#{pane_height},#{scroll_position}},1}' \
+	>"$cap" 2>/dev/null || exit 0
 
 if [ -n "${JUMP_DEBUG:-}" ]; then
 	{
